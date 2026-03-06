@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  :root {
+    /* Lapis Raro — tema claro */
+    --background: #F5F0EB;
+    --foreground: #2D2D2D;
+    --card: #FFFFFF;
+    --card-border: #E5DDD5;
+    --accent: #8B1A4A;
+    --accent-hover: #7A1740;
+    --cta: #E8443A;
+    --text-secondary: #8C8279;
+    --sidebar-bg: #FFFFFF;
+    --sidebar-active-bg: #FFFFFF;
+    --sidebar-active-border: #8B1A4A;
+    --hover: #EDE6DF;
+    --popover: #FFFFFF;
+    --popover-foreground: #2D2D2D;
+    --card-foreground: #2D2D2D;
+    --primary: 340 68% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 20% 93%;
+    --secondary-foreground: 0 0% 18%;
+    --muted: 30 20% 93%;
+    --muted-foreground: 30 8% 55%;
+    --accent-hsl: 340 68% 32%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 90% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 15% 90%;
+    --input: 30 15% 90%;
+    --ring: 340 68% 32%;
+    --chart-1: 340 68% 32%;
+    --chart-2: 262 83% 58%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 0 84% 60%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Lapis Raro — tema escuro */
+    --background: #0F0F0F;
+    --foreground: #E5E5E5;
+    --card: #1A1A1A;
+    --card-border: #2A2A2A;
+    --accent: #E8443A;
+    --accent-hover: #D63D35;
+    --cta: #E8443A;
+    --text-secondary: #737373;
+    --sidebar-bg: #1A1A1A;
+    --sidebar-active-bg: #1F1F1F;
+    --sidebar-active-border: #E8443A;
+    --hover: #222222;
+    --popover: #1A1A1A;
+    --popover-foreground: #E5E5E5;
+    --card-foreground: #E5E5E5;
+    --primary: 4 77% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 45%;
+    --accent-hsl: 4 77% 56%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 77% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 4 77% 56%;
+    --chart-1: 340 68% 32%;
+    --chart-2: 262 83% 58%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 142 71% 45%;
+    --chart-5: 0 84% 60%;
+  }
+}

@@ -1,0 +1,4 @@
+
+sync/.env
+sync/__pycache__/
+__pycache__/
