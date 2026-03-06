@@ -1,0 +1,5 @@
+httpx>=0.25
+supabase>=2.0
+loguru>=0.7
+python-dotenv>=1.0
+tenacity>=8.2

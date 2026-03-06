@@ -1,0 +1,101 @@
+# LapisRaro Dashboard - Cursor Rules
+ 
+## Contexto
+Sistema de dashboard para a agência LapisRaro. Extrai horas trabalhadas do Runrun.it via script Python (roda no GitHub Actions), armazena no Supabase, e exibe 3 dashboards + painel admin num app Next.js. O frontend consulta o Supabase diretamente (sem backend intermediário). O admin substitui completamente duas planilhas Excel (Available e Precificador).
+ 
+## Arquitetura
+- Script de sync: Python (roda no GitHub Actions, cron diário 6h + trigger manual)
+- Frontend: Next.js 14 (App Router) + TypeScript + Tailwind + Recharts + shadcn/ui
+- Banco/Auth/API: Supabase (PostgreSQL + Auth + REST)
+- Deploy frontend: Vercel
+- NÃO há backend FastAPI. O frontend fala direto com o Supabase.
+ 
+## Estrutura
+Monorepo: /sync (Python) e /frontend (Next.js)
+ 
+## Convenções — Sync (Python)
+- Type hints em todas as funções
+- Docstrings em português
+- Logging com loguru (nunca print)
+- httpx async para chamadas HTTP ao Runrun.it
+- Retry/backoff via tenacity (3 tentativas, wait_exponential min=2 max=30)
+- Supabase-py para operações no banco, upsert quando possível
+- Tempos SEMPRE em segundos
+ 
+## Convenções — Frontend (TypeScript)
+- Componentes funcionais com hooks
+- PascalCase para componentes
+- Interfaces TypeScript para todos os dados
+- Supabase-js para queries diretas nas tabelas e views
+- React Query (TanStack Query) para data fetching e cache
+- Tailwind para styling
+- shadcn/ui como base de componentes
+- Zustand para estado global (filtros)
+ 
+## Regras de Negócio
+ 
+### Expectativa de Horas
+- Vem dos shifts do Runrun.it: shifts[weekday].work_time (segundos)
+- Weekday: Python 0=Segunda, Runrun 0=Domingo. Conversão: runrun_weekday = (python_weekday + 1) % 7
+- N lançamentos no dia → expectativa dividida: quota = work_time // N
+- ÚLTIMO registro do dia: expected_time = quota + (work_time % N)
+- Expectativa = 0 se: feriado, férias ou fim de semana (mesmo com horas lançadas)
+- Dias sem lançamento NÃO geram registro
+ 
+### Férias
+- Endpoint /users_vacations retorna period_start/period_end
+- Verificar se date está entre start e end
+- NÃO usar apenas flag on_vacation do /users
+ 
+### Produtividade
+- Produtividade% = (horas_trabalhadas / horas_esperadas) × 100
+- Ociosidade% = 100% - Produtividade%
+- Calculada apenas sobre dias com lançamento
+ 
+### Chave Única
+- timesheet_entries: (user_id, date, project_id, client_id)
+ 
+## API Runrun.it
+ 
+### time_worked
+GET /api/v1.0/reports/time_worked
+  ?group_by=user_id,date,team_id,project_id,client_id,task_id
+  &period_type=custom_range&period_start=YYYY-MM-DD&period_end=YYYY-MM-DD
+  &include_capacity=true&include_untracked=true
+Headers: App-Key, User-Token, Content-Type: application/json
+Retorna result[]: user_id, user_name, team_id, team_name, project_id, project_name, client_id, client_name, task_id, date, automatic_time, manual_time, time (segundos)
+ 
+### users
+GET /api/v1.0/users → id, name, email, position, on_vacation, team_ids, shifts[{weekday, work_day, work_time}], shift_work_time_per_week
+ 
+### users_vacations
+GET /api/v1.0/users_vacations → [{id, user_id, period_start, period_end}]
+ 
+### off_days
+GET /api/v1.0/off_days?from=&to= → [{day, description}]
+ 
+## Tabelas Supabase
+- timesheet_entries: 1 linha por colaborador/dia/projeto/cliente
+- collaborators: dados + shifts
+- vacation_periods: férias com datas
+- holidays: feriados
+- client_groups + client_original_names: mapeamento de nomes
+- squads + squad_client_assignments + squad_collaborator_assignments
+- projected_allocations: % alocação (substitui Available)
+- contracted_hours + pricing_parameters: precificador (substitui Precificador)
+- sync_logs: histórico de sincronizações
+ 
+## Fluxo de Sincronização
+1. GET /users → upsert collaborators
+2. GET /users_vacations → upsert vacation_periods
+3. GET /off_days (40 dias) → upsert holidays
+4. GET /reports/time_worked (40 dias, group_by completo)
+5. Pré-processar: shifts_map, holidays_set, vacations_map, user_date_counts
+6. Calcular expected_time (com resto no último do dia)
+7. Upsert batch em timesheet_entries
+8. Registrar em sync_logs (status, records, duração, erros)
+ 
+## Geração de Código
+- Sempre arquivos completos com todos os imports
+- Incluir tratamento de erros
+- Usar interfaces/types definidas

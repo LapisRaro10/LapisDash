@@ -1,0 +1,32 @@
+name: Sync Runrun.it → Supabase
+
+on:
+  schedule:
+    - cron: '0 9 * * *'   # 9h UTC = 6h BRT
+  workflow_dispatch:         # permite trigger manual via GitHub API
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: pip install -r sync/requirements.txt
+      
+      - name: Run sync
+        env:
+          RUNRUN_APP_KEY: ${{ secrets.RUNRUN_APP_KEY }}
+          RUNRUN_USER_TOKEN: ${{ secrets.RUNRUN_USER_TOKEN }}
+          RUNRUN_BASE_URL: ${{ secrets.RUNRUN_BASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SYNC_DAYS_BACK: '40'
+          SYNC_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'cron' }}
+        working-directory: sync
+        run: python main.py
