@@ -162,7 +162,7 @@ export default function DashboardProjetosPage() {
 
   const supabase = createBrowserSupabaseClient()
   const { data, isPending } = useProjectsTimesheetAll()
-  const allData = data?.data ?? []
+  const allData = useMemo(() => data?.data ?? [], [data?.data])
 
   const { data: positions = [] } = useQuery({
     queryKey: ["collaborator-positions"],

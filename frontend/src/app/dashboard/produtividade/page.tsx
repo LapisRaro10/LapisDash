@@ -233,7 +233,6 @@ export default function DashboardProdutividadePage() {
                       padding: "8px 12px",
                       fontSize: 12,
                       color: "#c5c5c5",
-                      whiteSpace: "nowrap",
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
@@ -292,7 +291,6 @@ export default function DashboardProdutividadePage() {
                       padding: "8px 12px",
                       fontSize: 12,
                       color: "#c5c5c5",
-                      whiteSpace: "nowrap",
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
@@ -346,7 +344,6 @@ export default function DashboardProdutividadePage() {
                       padding: "8px 12px",
                       fontSize: 12,
                       color: "#c5c5c5",
-                      whiteSpace: "nowrap",
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
@@ -402,7 +399,6 @@ export default function DashboardProdutividadePage() {
                       padding: "8px 12px",
                       fontSize: 12,
                       color: "#c5c5c5",
-                      whiteSpace: "nowrap",
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
@@ -459,7 +455,6 @@ export default function DashboardProdutividadePage() {
               label={{ value: "100%", position: "insideTopRight", fontSize: 11 }}
             />
             <Tooltip
-              cursor={false}
               contentStyle={{
                 backgroundColor: "var(--card)",
                 border: "1px solid var(--card-border)",
@@ -492,11 +487,10 @@ export default function DashboardProdutividadePage() {
               dataKey="productivity_percent"
               name="Produtividade %"
               radius={[0, 4, 4, 0]}
-              cursor={false}
               label={{
                 position: "right",
                 fontSize: 11,
-                formatter: (v: number) => formatPercent(v),
+                formatter: (v) => formatPercent(typeof v === "number" ? v : 0),
               }}
             >
               {chartData.map((entry, index) => (

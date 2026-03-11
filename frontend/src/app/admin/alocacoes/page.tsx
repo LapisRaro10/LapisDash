@@ -547,7 +547,6 @@ export default function AdminAlocacoesPage() {
                     </TableCell>
                     {filteredSquadGroups.map((sg) =>
                       sg.clients.map((g) => {
-                        const key = cellKey(c.id, g.id)
                         const value = getCellValue(c.id, g.id)
                         const remaining = remainingForCell(c.id, g.id)
                         const isEditing = editingCell?.collaboratorId === c.id && editingCell?.clientGroupId === g.id

@@ -137,7 +137,7 @@ export function useSavePricing() {
         const totalMonths =
           (endYear - startYear) * 12 + (endMonth - startMonth) + 1
 
-        let current = new Date(startYear, startMonth - 1, 1)
+        const current = new Date(startYear, startMonth - 1, 1)
         const endFirstDay = new Date(endYear, endMonth - 1, 1)
 
         while (current <= endFirstDay) {

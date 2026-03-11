@@ -175,11 +175,13 @@ export default function AdminPrecificadorPage() {
   )
 
   // ---- Seção 1: Importar Cargos ----
-  const [positionsFile, setPositionsFile] = useState<File | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_positionsFile, setPositionsFile] = useState<File | null>(null)
   const [alreadyImportedRows, setAlreadyImportedRows] = useState<AlreadyImportedRow[]>([])
   const [positionReviewRows, setPositionReviewRows] = useState<PositionReviewRow[]>([])
   const [positionsFileName, setPositionsFileName] = useState("")
-  const [existingPositionCollaboratorIds, setExistingPositionCollaboratorIds] = useState<string[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_existingPositionCollaboratorIds, setExistingPositionCollaboratorIds] = useState<string[]>([])
   const [existingPositionsMap, setExistingPositionsMap] = useState<Record<string, string>>({})
   const [alreadyImportedCollapsed, setAlreadyImportedCollapsed] = useState(true)
   const [deleteImportConfirm, setDeleteImportConfirm] = useState<{
@@ -293,9 +295,9 @@ export default function AdminPrecificadorPage() {
         }
 
         const existingPositionsMap = new Map<string, string>()
-        for (const [cid, ex] of existingByCollabId) {
+        existingByCollabId.forEach((ex, cid) => {
           existingPositionsMap.set(cid, ex.position_title)
-        }
+        })
 
         console.log("[Precificador] Classificação: já importados =", alreadyImported.length, "| novos para revisar =", review.length)
 
@@ -311,7 +313,7 @@ export default function AdminPrecificadorPage() {
       }
       e.target.value = ""
     },
-    [collaboratorsForMatch]
+    [collaboratorsForMatch, collaborators]
   )
 
   /** Label para dropdown: nome + "(já atribuído: cargo)" se tiver. */
@@ -383,12 +385,12 @@ export default function AdminPrecificadorPage() {
     })
   }, [])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const setAlreadyImportedEditCollaborator = useCallback((index: number, collaboratorId: string) => {
     setAlreadyImportedRows((prev) => {
       const next = [...prev]
       const row = next[index]
       if (!row) return prev
-      const collab = collaborators.find((c) => c.id === collaboratorId)
       next[index] = {
         ...row,
         editCollaboratorId: collaboratorId,
@@ -396,7 +398,7 @@ export default function AdminPrecificadorPage() {
       }
       return next
     })
-  }, [collaborators])
+  }, [])
 
   const setAlreadyImportedEditPositionTitle = useCallback((index: number, title: string) => {
     setAlreadyImportedRows((prev) => {
@@ -519,7 +521,8 @@ export default function AdminPrecificadorPage() {
   /** Período: "De" e "Até" (YYYY-MM). */
   const [periodStart, setPeriodStart] = useState("")
   const [periodEnd, setPeriodEnd] = useState("")
-  const [pricingFile, setPricingFile] = useState<File | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pricingFile, setPricingFile] = useState<File | null>(null)
   const [pricingPreviewRows, setPricingPreviewRows] = useState<PricingRow[]>([])
   const [pricingFileName, setPricingFileName] = useState("")
 

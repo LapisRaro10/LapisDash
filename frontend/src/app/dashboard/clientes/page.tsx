@@ -335,7 +335,6 @@ export default function DashboardClientesPage() {
             />
             <YAxis tick={{ fill: "var(--text-secondary)" }} />
             <Tooltip
-              cursor={false}
               content={({ active, payload, label }) => {
                 if (!active || !payload) return null
                 return (
@@ -358,21 +357,20 @@ export default function DashboardClientesPage() {
               name="Contratado"
               fill="#f59e0b"
               radius={[2, 2, 0, 0]}
-              cursor={false}
             />
             <Bar
               dataKey="projected_hours"
               name="Available"
               fill="#8b5cf6"
               radius={[2, 2, 0, 0]}
-              cursor={false}
+              cursor="default"
             />
             <Bar
               dataKey="realized_hours"
               name="Realizado"
               fill="#8B1A4A"
               radius={[2, 2, 0, 0]}
-              cursor={false}
+              cursor="default"
             />
           </BarChart>
         </ResponsiveContainer>

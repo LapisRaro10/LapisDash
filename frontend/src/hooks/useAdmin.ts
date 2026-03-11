@@ -54,7 +54,17 @@ export function useClientGroups() {
       if (e3) throw e3
       const groupRows = (groups ?? []) as ClientGroupDb[]
       const nameRows = (names ?? []) as ClientOriginalNameDb[]
-      const assignmentRows = (assignments ?? []) as SquadAssignmentDb[]
+      const assignmentRows = ((assignments ?? []) as Array<{
+        squad_id: number
+        client_group_id: number
+        squads: { id: number; name: string; color: string | null }[] | null
+      }>).map((a) => ({
+        squad_id: a.squad_id,
+        client_group_id: a.client_group_id,
+        squads: Array.isArray(a.squads) && a.squads.length > 0
+          ? { id: a.squads[0]!.id, name: a.squads[0]!.name, color: a.squads[0]!.color }
+          : null,
+      })) as SquadAssignmentDb[]
       const assignmentByGroupId = new Map(
         assignmentRows.map((a) => [a.client_group_id, a])
       )

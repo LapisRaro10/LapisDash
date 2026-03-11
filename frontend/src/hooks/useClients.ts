@@ -204,11 +204,17 @@ export function useClientsSummary() {
         const { data: squadAssignments } = await supabase
           .from("squad_collaborator_assignments")
           .select("collaborator_id, squad_id, squads(name)")
-        const squadAssignmentRows = (squadAssignments ?? []) as {
+        const squadAssignmentRows = ((squadAssignments ?? []) as Array<{
           collaborator_id: string
           squad_id: number
-          squads: { name: string } | null
-        }[]
+          squads: { name: string }[] | null
+        }>).map((sa) => ({
+          collaborator_id: sa.collaborator_id,
+          squad_id: sa.squad_id,
+          squads: Array.isArray(sa.squads) && sa.squads.length > 0
+            ? { name: sa.squads[0]!.name }
+            : null,
+        }))
         const collabSquadMap = new Map<string, string>()
         for (const sa of squadAssignmentRows) {
           if (sa.squads?.name) collabSquadMap.set(sa.collaborator_id, sa.squads.name)
@@ -235,13 +241,13 @@ export function useClientsSummary() {
 
         // Filtrar: colaborador passa se atende TODOS os filtros ativos
         const allCollabIds = new Set([
-          ...collabSquadMap.keys(),
-          ...collabTeamMap.keys(),
-          ...collabNameMap.keys(),
+          ...Array.from(collabSquadMap.keys()),
+          ...Array.from(collabTeamMap.keys()),
+          ...Array.from(collabNameMap.keys()),
         ])
 
         allowedCollaboratorIds = new Set<string>()
-        for (const cid of allCollabIds) {
+        for (const cid of Array.from(allCollabIds)) {
           // Filtro de squad
           if (selectedSquads.length > 0) {
             const squadName = collabSquadMap.get(cid)
@@ -349,7 +355,7 @@ export function useClientsSummary() {
       // 6) Cruzamento no frontend: monta ClientSummary por unified_name
       const summaryByKey = new Map<string, ClientSummary>()
 
-      for (const [client_name, { realizedHours, squad_name }] of realizedByClient) {
+      realizedByClient.forEach(({ realizedHours, squad_name }, client_name) => {
         const realized_hours = realizedHours
         const groupId = unifiedNameToId.get(client_name)
         const projected_hours = groupId != null ? projectedMap.get(groupId) ?? 0 : 0
@@ -365,7 +371,7 @@ export function useClientsSummary() {
               ? Math.round((realized_hours / projected_hours) * 1000) / 10
               : 0,
         })
-      }
+      })
 
       // Inclui client_groups sem realized (só projetado/contratado), respeitando filtro de cliente
       for (const g of groups) {

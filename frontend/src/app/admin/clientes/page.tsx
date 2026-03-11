@@ -45,7 +45,6 @@ import {
   Edit2,
   Save,
   Trash2,
-  ChevronRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -94,9 +93,9 @@ function useAvailableOriginalClients() {
         .neq("client_name", "")
         .limit(10000)
       if (e1) throw e1
-      const uniqueOriginals = [
-        ...new Set((allOriginalClients ?? []).map((c: { client_name: string }) => c.client_name)),
-      ].sort()
+      const uniqueOriginals = Array.from(
+        new Set((allOriginalClients ?? []).map((c: { client_name: string }) => c.client_name))
+      ).sort()
 
       const { data: associated, error: e2 } = await supabase
         .from("client_original_names")
