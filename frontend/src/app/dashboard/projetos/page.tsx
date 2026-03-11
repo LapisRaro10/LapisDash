@@ -27,7 +27,7 @@ function formatDateDDMMYYYY(dateStr: string): string {
   return `${d}/${m}/${y}`
 }
 
-// --- Agrupamento: Cliente → Equipe → Cargo → Usuário → Projeto (5 níveis) ---
+// --- Agrupamento: Cliente → Equipe → Cargo → Usuário → Projeto → Lançamentos (6 níveis) ---
 interface GroupedProject {
   project_name: string
   rows: ProjectRow[]
@@ -268,7 +268,11 @@ export default function DashboardProjetosPage() {
         for (const cargo of team.cargos) {
           keys.add(`${client.client_name}|${team.team_name}|${cargo.position_title}`)
           for (const user of cargo.users) {
-            keys.add(`${client.client_name}|${team.team_name}|${cargo.position_title}|${user.user_name}`)
+            const userKey = `${client.client_name}|${team.team_name}|${cargo.position_title}|${user.user_name}`
+            keys.add(userKey)
+            for (const project of user.projects) {
+              keys.add(`${userKey}|${project.project_name}`)
+            }
           }
         }
       }
@@ -435,6 +439,37 @@ export default function DashboardProjetosPage() {
             if (!userExpanded) continue
 
             for (const project of user.projects) {
+              const projectKey = `${userKey}|${project.project_name ?? "—"}`
+              const projectExpanded = expanded.has(projectKey)
+              const nRows = project.rows.length
+
+              rows.push(
+                <TableRow
+                  key={`p-${projectKey}`}
+                  onClick={() => toggle(projectKey)}
+                  className="cursor-pointer border-[#E5DDD5] dark:border-[#2A2A2A] hover:bg-[#EDE6DF]/50 dark:hover:bg-[#222222]/50"
+                >
+                  <TableCell className="font-medium text-[#2D2D2D] dark:text-[#E5E5E5]" style={{ paddingLeft: 102 }}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-[3px] rounded-sm bg-[#444]" />
+                      {projectExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <span>{project.project_name ?? "—"}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {nRows} lançamento{nRows !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell />
+                  <TableCell />
+                  <TableCell />
+                  <TableCell className="text-right font-mono">
+                    {formatSeconds(project.totalSeconds ?? 0)}
+                  </TableCell>
+                </TableRow>
+              )
+
+              if (!projectExpanded) continue
+
               for (const row of project.rows) {
                 const rowKey = `r-${userKey}-${project.project_name ?? ""}-${row.task_id ?? ""}-${row.date}`
                 rows.push(
@@ -442,10 +477,9 @@ export default function DashboardProjetosPage() {
                     key={rowKey}
                     className="border-[#E5DDD5] dark:border-[#2A2A2A] hover:bg-[#EDE6DF]/30 dark:hover:bg-[#222222]/30"
                   >
-                    <TableCell className="text-[#2D2D2D] dark:text-[#E5E5E5]" style={{ paddingLeft: 102 }}>
+                    <TableCell className="text-[#2D2D2D] dark:text-[#E5E5E5]" style={{ paddingLeft: 124 }}>
                       <div className="flex items-center gap-2">
                         <Minus size={12} className="text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{project.project_name ?? "—"}</span>
                       </div>
                     </TableCell>
                     <TableCell />
@@ -582,8 +616,11 @@ export default function DashboardProjetosPage() {
                     <span className="inline-flex items-center gap-1.5 mr-4">
                       <span className="inline-block h-3 w-[3px] rounded-sm bg-[#a78bfa]" /> Roxo = Cargo
                     </span>
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 mr-4">
                       <span className="inline-block h-3 w-[3px] rounded-sm bg-[#8C8279]" /> Cinza = Usuário
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-3 w-[3px] rounded-sm bg-[#444]" /> Escuro = Projeto
                     </span>
                   </TableCell>
                 </TableRow>

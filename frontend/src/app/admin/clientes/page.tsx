@@ -9,6 +9,10 @@ import {
   useDeleteClientGroup,
   useCreateOriginalName,
   useDeleteOriginalName,
+  useSquadsWithCount,
+  useCreateSquad,
+  useUpdateSquad,
+  useDeleteSquad,
 } from "@/hooks/useAdmin"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useQuery } from "@tanstack/react-query"
@@ -41,35 +45,41 @@ import {
   Edit2,
   Save,
   Trash2,
+  ChevronRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Squads fixos: Verde, Azul, Vermelho, Novos Negócios
-const SQUAD_BADGE_CLASSES: Record<string, string> = {
-  Verde: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/30",
-  Azul: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/30",
-  Vermelho: "bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/30",
-  "Novos Negócios": "bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/30",
+// Mapa de cores dinâmico baseado no campo color do squad
+const COLOR_MAP: Record<string, string> = {
+  green: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/30",
+  blue: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/30",
+  red: "bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/30",
+  amber: "bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/30",
+  purple: "bg-purple-500/20 text-purple-800 dark:text-purple-200 border-purple-500/30",
+  pink: "bg-pink-500/20 text-pink-800 dark:text-pink-200 border-pink-500/30",
+  gray: "bg-gray-500/20 text-gray-800 dark:text-gray-200 border-gray-500/30",
+  orange: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/30",
 }
+
+const COLOR_OPTIONS = [
+  { value: "green", label: "Verde" },
+  { value: "blue", label: "Azul" },
+  { value: "red", label: "Vermelho" },
+  { value: "amber", label: "Amarelo" },
+  { value: "purple", label: "Roxo" },
+  { value: "pink", label: "Rosa" },
+  { value: "gray", label: "Cinza" },
+  { value: "orange", label: "Laranja" },
+]
 
 const defaultSquadClass = "bg-muted text-muted-foreground"
 
-type ToastState = { message: string; open: boolean }
-
-function useSquads() {
-  const supabase = createBrowserSupabaseClient()
-  return useQuery({
-    queryKey: ["admin", "squads"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("squads")
-        .select("id, name")
-        .order("name")
-      if (error) throw error
-      return (data ?? []) as { id: number; name: string }[]
-    },
-  })
+function getSquadBadgeClass(color: string | null): string {
+  if (!color) return defaultSquadClass
+  return COLOR_MAP[color] ?? defaultSquadClass
 }
+
+type ToastState = { message: string; open: boolean }
 
 /** Clientes originais do Runrun.it (timesheet_entries) que ainda não estão em client_original_names. */
 function useAvailableOriginalClients() {
@@ -104,13 +114,16 @@ function useAvailableOriginalClients() {
 export default function AdminClientesPage() {
   const { data: groups = [], isLoading } = useClientGroups()
   const { data: availableRunrunClients = [] } = useAvailableOriginalClients()
-  const { data: squads = [] } = useSquads()
+  const { data: squadsWithCount = [] } = useSquadsWithCount()
   const createGroup = useCreateClientGroup()
   const updateGroup = useUpdateClientGroup()
   const updateGroupSquad = useUpdateClientGroupSquad()
   const deleteGroup = useDeleteClientGroup()
   const addOriginalName = useCreateOriginalName()
   const removeOriginalName = useDeleteOriginalName()
+  const createSquad = useCreateSquad()
+  const updateSquad = useUpdateSquad()
+  const deleteSquad = useDeleteSquad()
 
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [newGroupOpen, setNewGroupOpen] = useState(false)
@@ -128,6 +141,20 @@ export default function AdminClientesPage() {
     name: string
   } | null>(null)
   const [toast, setToast] = useState<ToastState>({ message: "", open: false })
+  
+  // Estados para gerenciamento de squads
+  const [squadsSectionExpanded, setSquadsSectionExpanded] = useState(false)
+  const [newSquadOpen, setNewSquadOpen] = useState(false)
+  const [newSquadName, setNewSquadName] = useState("")
+  const [newSquadColor, setNewSquadColor] = useState<string>("green")
+  const [editingSquadId, setEditingSquadId] = useState<number | null>(null)
+  const [editingSquadName, setEditingSquadName] = useState("")
+  const [editingSquadColor, setEditingSquadColor] = useState<string>("")
+  const [deleteSquadConfirm, setDeleteSquadConfirm] = useState<{
+    id: number
+    name: string
+    clientCount: number
+  } | null>(null)
 
   // Grupos ordenados por nome e filtrados pela busca
   const sortedFilteredGroups = useMemo(() => {
@@ -237,6 +264,69 @@ export default function AdminClientesPage() {
     setEditingName(group.unified_name)
   }
 
+  // Handlers para gerenciamento de squads
+  const handleCreateSquad = () => {
+    const name = newSquadName.trim()
+    if (!name) return
+    if (squadsWithCount.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+      showToast("Já existe um squad com esse nome.")
+      return
+    }
+    createSquad.mutate(
+      { name, color: newSquadColor },
+      {
+        onSuccess: () => {
+          setNewSquadOpen(false)
+          setNewSquadName("")
+          setNewSquadColor("green")
+          showToast("Squad criado.")
+        },
+        onError: (err) => showToast(`Erro: ${(err as Error).message}`),
+      }
+    )
+  }
+
+  const handleUpdateSquad = (id: number) => {
+    const name = editingSquadName.trim()
+    if (!name) {
+      setEditingSquadId(null)
+      return
+    }
+    const existing = squadsWithCount.find(s => s.id !== id && s.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      showToast("Já existe um squad com esse nome.")
+      return
+    }
+    updateSquad.mutate(
+      { id, payload: { name, color: editingSquadColor || undefined } },
+      {
+        onSuccess: () => {
+          setEditingSquadId(null)
+          showToast("Squad atualizado.")
+        },
+        onError: (err) => showToast(`Erro: ${(err as Error).message}`),
+      }
+    )
+  }
+
+  const handleDeleteSquad = () => {
+    if (!deleteSquadConfirm) return
+    const id = deleteSquadConfirm.id
+    deleteSquad.mutate(id, {
+      onSuccess: () => {
+        setDeleteSquadConfirm(null)
+        showToast("Squad excluído.")
+      },
+      onError: (err) => showToast(`Erro: ${(err as Error).message}`),
+    })
+  }
+
+  const startEditSquad = (id: number, name: string, color: string | null) => {
+    setEditingSquadId(id)
+    setEditingSquadName(name)
+    setEditingSquadColor(color || "green")
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
@@ -265,6 +355,129 @@ export default function AdminClientesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Seção Gerenciar Squads */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer py-4"
+          onClick={() => setSquadsSectionExpanded(!squadsSectionExpanded)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {squadsSectionExpanded ? (
+                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+              )}
+              <h2 className="text-lg font-semibold">Gerenciar Squads</h2>
+            </div>
+            <Button
+              size="sm"
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={(e) => {
+                e.stopPropagation()
+                setNewSquadOpen(true)
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Squad
+            </Button>
+          </div>
+        </CardHeader>
+        {squadsSectionExpanded && (
+          <CardContent className="pt-0 pb-4">
+            <div className="flex flex-wrap gap-3">
+              {squadsWithCount.map((squad) => {
+                const isEditing = editingSquadId === squad.id
+                return (
+                  <div
+                    key={squad.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border p-3 min-w-[200px]",
+                      getSquadBadgeClass(squad.color)
+                    )}
+                  >
+                    {isEditing ? (
+                      <>
+                        <div className="flex-1 space-y-2">
+                          <Input
+                            className="h-7 text-sm"
+                            value={editingSquadName}
+                            onChange={(e) => setEditingSquadName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleUpdateSquad(squad.id)
+                              if (e.key === "Escape") setEditingSquadId(null)
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Select
+                            value={editingSquadColor}
+                            onValueChange={setEditingSquadColor}
+                          >
+                            <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COLOR_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => handleUpdateSquad(squad.id)}
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{squad.name}</div>
+                          <div className="text-xs opacity-80">
+                            {squad.client_count} {squad.client_count === 1 ? "cliente" : "clientes"}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            startEditSquad(squad.id, squad.name, squad.color)
+                          }}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteSquadConfirm({
+                              id: squad.id,
+                              name: squad.name,
+                              clientCount: squad.client_count,
+                            })
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Info box */}
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
@@ -369,13 +582,13 @@ export default function AdminClientesPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Nenhum</SelectItem>
-                      {squads.map((s) => (
+                      {squadsWithCount.map((s) => (
                         <SelectItem key={s.id} value={String(s.id)}>
                           <Badge
                             variant="outline"
                             className={cn(
                               "font-normal",
-                              SQUAD_BADGE_CLASSES[s.name] ?? defaultSquadClass
+                              getSquadBadgeClass(s.color)
                             )}
                           >
                             {s.name}
@@ -510,7 +723,7 @@ export default function AdminClientesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
-                  {squads.map((s) => (
+                  {squadsWithCount.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
                     </SelectItem>
@@ -592,6 +805,94 @@ export default function AdminClientesPage() {
               variant="destructive"
               onClick={handleDeleteGroup}
               disabled={deleteGroup.isPending}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Novo Squad */}
+      <Dialog open={newSquadOpen} onOpenChange={setNewSquadOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Squad</DialogTitle>
+            <DialogDescription>
+              Crie um novo squad com nome e cor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome</label>
+              <Input
+                placeholder="Ex: Verde"
+                value={newSquadName}
+                onChange={(e) => setNewSquadName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateSquad()
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Cor</label>
+              <Select value={newSquadColor} onValueChange={setNewSquadColor}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COLOR_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewSquadOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateSquad}
+              disabled={
+                !newSquadName.trim() || createSquad.isPending
+              }
+            >
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Excluir Squad */}
+      <Dialog
+        open={!!deleteSquadConfirm}
+        onOpenChange={(open) => !open && setDeleteSquadConfirm(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir squad?</DialogTitle>
+            <DialogDescription>
+              {deleteSquadConfirm
+                ? `Excluir squad "${deleteSquadConfirm.name}"? Os ${deleteSquadConfirm.clientCount} cliente(s) associado(s) ficarão sem squad.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteSquadConfirm(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSquad}
+              disabled={deleteSquad.isPending}
             >
               Excluir
             </Button>

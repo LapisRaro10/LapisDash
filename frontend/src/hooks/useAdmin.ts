@@ -622,3 +622,105 @@ export function useDeletePricingParameter(
     ...options,
   })
 }
+
+// ---- Squads management ----
+
+export function useSquadsWithCount() {
+  const supabase = createBrowserSupabaseClient()
+  return useQuery({
+    queryKey: ["admin", "squads-with-count"],
+    queryFn: async () => {
+      const { data: squads, error: e1 } = await supabase
+        .from("squads")
+        .select("id, name, color")
+        .order("name")
+      if (e1) throw e1
+
+      const { data: assignments, error: e2 } = await supabase
+        .from("squad_client_assignments")
+        .select("squad_id")
+      if (e2) throw e2
+
+      const countMap = new Map<number, number>()
+      for (const a of (assignments ?? [])) {
+        countMap.set(a.squad_id, (countMap.get(a.squad_id) ?? 0) + 1)
+      }
+
+      return (squads ?? []).map(s => ({
+        ...s,
+        client_count: countMap.get(s.id) ?? 0
+      }))
+    },
+  })
+}
+
+export function useCreateSquad() {
+  const qc = useQueryClient()
+  const supabase = createBrowserSupabaseClient()
+  return useMutation({
+    mutationFn: async (payload: { name: string; color?: string }) => {
+      const { error } = await supabase.from("squads").insert(payload)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "squads-with-count"] })
+      qc.invalidateQueries({ queryKey: ["admin", "squads"] })
+      qc.invalidateQueries({ queryKey: ["admin", "client-groups"] })
+      qc.invalidateQueries({ queryKey: ["filter-squads"] })
+    },
+  })
+}
+
+export function useUpdateSquad() {
+  const qc = useQueryClient()
+  const supabase = createBrowserSupabaseClient()
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: { name?: string; color?: string } }) => {
+      const { error } = await supabase.from("squads").update(payload).eq("id", id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "squads-with-count"] })
+      qc.invalidateQueries({ queryKey: ["admin", "squads"] })
+      qc.invalidateQueries({ queryKey: ["admin", "client-groups"] })
+      qc.invalidateQueries({ queryKey: ["filter-squads"] })
+      qc.invalidateQueries({ queryKey: ["clients-summary"] })
+    },
+  })
+}
+
+export function useDeleteSquad() {
+  const qc = useQueryClient()
+  const supabase = createBrowserSupabaseClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      // Primeiro remover todas as associações desse squad
+      const { error: e1 } = await supabase
+        .from("squad_client_assignments")
+        .delete()
+        .eq("squad_id", id)
+      if (e1) throw e1
+      
+      // Remover associações de colaboradores (se existir)
+      const { error: e2 } = await supabase
+        .from("squad_collaborator_assignments")
+        .delete()
+        .eq("squad_id", id)
+      if (e2) throw e2
+
+      // Deletar o squad
+      const { error: e3 } = await supabase
+        .from("squads")
+        .delete()
+        .eq("id", id)
+      if (e3) throw e3
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "squads-with-count"] })
+      qc.invalidateQueries({ queryKey: ["admin", "squads"] })
+      qc.invalidateQueries({ queryKey: ["admin", "client-groups"] })
+      qc.invalidateQueries({ queryKey: ["filter-squads"] })
+      qc.invalidateQueries({ queryKey: ["clients-summary"] })
+    },
+  })
+}
