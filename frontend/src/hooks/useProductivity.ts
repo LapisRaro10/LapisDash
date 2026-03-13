@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
 import { createBrowserSupabaseClient, fetchAllPages } from "@/lib/supabase"
-import { useFilterStore } from "@/store/filterStore"
 import type { ProductivitySummary } from "@/types"
 
 interface ProductivityRowDb {
@@ -13,9 +12,15 @@ interface ProductivityRowDb {
 
 const SECONDS_TO_HOURS = 1 / 3600
 
-export function useProductivity() {
+export type ProductivityFilters = {
+  dateRange: { start: string; end: string }
+  selectedTeams: string[]
+  selectedUsers: string[]
+}
+
+export function useProductivity(filters: ProductivityFilters) {
   const supabase = createBrowserSupabaseClient()
-  const { dateRange, selectedTeams, selectedUsers } = useFilterStore()
+  const { dateRange, selectedTeams, selectedUsers } = filters
 
   return useQuery({
     queryKey: [

@@ -6,6 +6,7 @@ import { Download, ChevronRight, ChevronDown, Minus } from "lucide-react"
 import { useProjectsTimesheetAll } from "@/hooks/useProjects"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { FilterBar } from "@/components/layout/FilterBar"
+import { useProjetosFilterStore } from "@/store/filterStore"
 import { formatSeconds, exportToExcel } from "@/lib/utils"
 import {
   Table,
@@ -161,7 +162,16 @@ export default function DashboardProjetosPage() {
   const [exporting, setExporting] = useState(false)
 
   const supabase = createBrowserSupabaseClient()
-  const { data, isPending } = useProjectsTimesheetAll()
+  const filterStore = useProjetosFilterStore()
+  const filters = {
+    dateRange: filterStore.dateRange,
+    selectedSquads: filterStore.selectedSquads,
+    selectedTeams: filterStore.selectedTeams,
+    selectedUsers: filterStore.selectedUsers,
+    selectedClients: filterStore.selectedClients,
+    selectedProjects: filterStore.selectedProjects,
+  }
+  const { data, isPending } = useProjectsTimesheetAll(filters)
   const allData = useMemo(() => data?.data ?? [], [data?.data])
 
   const { data: positions = [] } = useQuery({
@@ -545,6 +555,7 @@ export default function DashboardProjetosPage() {
         showTeam
         showUser
         showProject
+        useFilterStore={() => filterStore}
       />
 
       <div className="overflow-hidden rounded-lg border border-[#E5DDD5] dark:border-[#2A2A2A] bg-white dark:bg-[#1A1A1A]">

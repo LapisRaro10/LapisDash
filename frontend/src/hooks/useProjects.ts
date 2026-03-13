@@ -3,7 +3,6 @@ import {
   createBrowserSupabaseClient,
   fetchAllPages,
 } from "@/lib/supabase"
-import { useFilterStore } from "@/store/filterStore"
 import type { ProjectRow } from "@/types"
 
 const PROJECT_SELECT =
@@ -73,25 +72,13 @@ export async function fetchProjectsTimesheetAll(
   })
 }
 
-export function useProjectsTimesheet(page: number, pageSize: number) {
+export function useProjectsTimesheet(
+  page: number,
+  pageSize: number,
+  filters: ProjectsTimesheetFilters
+) {
   const supabase = createBrowserSupabaseClient()
-  const {
-    dateRange,
-    selectedSquads,
-    selectedTeams,
-    selectedUsers,
-    selectedClients,
-    selectedProjects,
-  } = useFilterStore()
-
-  const filters: ProjectsTimesheetFilters = {
-    dateRange,
-    selectedSquads,
-    selectedTeams,
-    selectedUsers,
-    selectedClients,
-    selectedProjects,
-  }
+  const { dateRange, selectedSquads, selectedTeams, selectedUsers, selectedClients, selectedProjects } = filters
 
   return useQuery({
     queryKey: [
@@ -164,25 +151,9 @@ export function useProjectsTimesheet(page: number, pageSize: number) {
 }
 
 /** Busca todos os registros do timesheet de projetos (sem paginação) para tabela colapsável. */
-export function useProjectsTimesheetAll() {
+export function useProjectsTimesheetAll(filters: ProjectsTimesheetFilters) {
   const supabase = createBrowserSupabaseClient()
-  const {
-    dateRange,
-    selectedSquads,
-    selectedTeams,
-    selectedUsers,
-    selectedClients,
-    selectedProjects,
-  } = useFilterStore()
-
-  const filters: ProjectsTimesheetFilters = {
-    dateRange,
-    selectedSquads,
-    selectedTeams,
-    selectedUsers,
-    selectedClients,
-    selectedProjects,
-  }
+  const { dateRange, selectedSquads, selectedTeams, selectedUsers, selectedClients, selectedProjects } = filters
 
   return useQuery({
     queryKey: [

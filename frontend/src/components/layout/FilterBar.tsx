@@ -11,7 +11,7 @@ function parseLocalDate(dateStr: string): Date {
 }
 import { useQuery } from "@tanstack/react-query"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { useFilterStore } from "@/store/filterStore"
+import type { FilterState } from "@/store/filterStore"
 import {
   Select,
   SelectContent,
@@ -48,6 +48,7 @@ interface FilterBarProps {
   showUser?: boolean
   showClient?: boolean
   showProject?: boolean
+  useFilterStore: () => FilterState
 }
 
 /** Squad: tabela squads (poucos registros). Opções usam o nome como id para bater com squad_name na v_client_hours. */
@@ -234,6 +235,7 @@ export function FilterBar({
   showUser = false,
   showClient = false,
   showProject = false,
+  useFilterStore,
 }: FilterBarProps) {
   const {
     dateRange,

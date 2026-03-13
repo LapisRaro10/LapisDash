@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
 import { createBrowserSupabaseClient, fetchAllPages } from "@/lib/supabase"
-import { useFilterStore } from "@/store/filterStore"
 import type { ClientSummary } from "@/types"
 
 /** Linha bruta da view v_client_hours (select *). total_time em segundos; hours_decimal já em horas (se existir). */
@@ -87,10 +86,17 @@ interface ClientGroupRow {
   unified_name: string
 }
 
-export function useClientsSummary() {
+export type ClientsSummaryFilters = {
+  dateRange: { start: string; end: string }
+  selectedSquads: string[]
+  selectedTeams: string[]
+  selectedUsers: string[]
+  selectedClients: string[]
+}
+
+export function useClientsSummary(filters: ClientsSummaryFilters) {
   const supabase = createBrowserSupabaseClient()
-  const { dateRange, selectedSquads, selectedTeams, selectedUsers, selectedClients } =
-    useFilterStore()
+  const { dateRange, selectedSquads, selectedTeams, selectedUsers, selectedClients } = filters
 
   return useQuery({
     queryKey: [

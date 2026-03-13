@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import type { CSSProperties } from "react"
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,6 +16,7 @@ import {
 import { TrendingUp, Clock, Target, AlertTriangle, Download } from "lucide-react"
 import { useProductivity } from "@/hooks/useProductivity"
 import { FilterBar } from "@/components/layout/FilterBar"
+import { useProdutividadeFilterStore } from "@/store/filterStore"
 import { KPICard } from "@/components/layout/KPICard"
 import {
   formatHoursDecimal,
@@ -55,7 +57,13 @@ type SortField =
 type SortDirection = "asc" | "desc"
 
 export default function DashboardProdutividadePage() {
-  const { data = [], isPending } = useProductivity()
+  const filterStore = useProdutividadeFilterStore()
+  const filters = {
+    dateRange: filterStore.dateRange,
+    selectedTeams: filterStore.selectedTeams,
+    selectedUsers: filterStore.selectedUsers,
+  }
+  const { data = [], isPending } = useProductivity(filters)
   const [search, setSearch] = useState("")
   const [sortField, setSortField] = useState<SortField>("productivity_percent")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
@@ -194,7 +202,12 @@ export default function DashboardProdutividadePage() {
         </Button>
       </header>
 
-      <FilterBar showPeriod showTeam showUser />
+      <FilterBar 
+        showPeriod 
+        showTeam 
+        showUser 
+        useFilterStore={() => filterStore}
+      />
 
       <div className="mb-6 grid grid-cols-4 gap-4">
         <KPICard
@@ -236,9 +249,9 @@ export default function DashboardProdutividadePage() {
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
-                      whiteSpace: "normal",
+                      whiteSpace: "normal" as const,
                       lineHeight: 1.5,
-                    }}
+                    } as CSSProperties}
                   >
                     (Hs Trabalhadas ÷ Hs Esperadas) × 100
                   </div>
@@ -294,9 +307,9 @@ export default function DashboardProdutividadePage() {
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
-                      whiteSpace: "normal",
+                      whiteSpace: "normal" as const,
                       lineHeight: 1.5,
-                    }}
+                    } as CSSProperties}
                   >
                     Soma das horas registradas no Runrun.it no período
                   </div>
@@ -347,9 +360,9 @@ export default function DashboardProdutividadePage() {
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
-                      whiteSpace: "normal",
+                      whiteSpace: "normal" as const,
                       lineHeight: 1.5,
-                    }}
+                    } as CSSProperties}
                   >
                     Jornada do Runrun.it. Desconsidera feriados, fins de semana e
                     dias sem registro. Para abonos, acesse Adm → Colaboradores →
@@ -402,9 +415,9 @@ export default function DashboardProdutividadePage() {
                       zIndex: 50,
                       boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                       maxWidth: 280,
-                      whiteSpace: "normal",
+                      whiteSpace: "normal" as const,
                       lineHeight: 1.5,
-                    }}
+                    } as CSSProperties}
                   >
                     Colaboradores com produtividade abaixo de 80% no período
                   </div>
@@ -455,6 +468,7 @@ export default function DashboardProdutividadePage() {
               label={{ value: "100%", position: "insideTopRight", fontSize: 11 }}
             />
             <Tooltip
+              cursor={false}
               contentStyle={{
                 backgroundColor: "var(--card)",
                 border: "1px solid var(--card-border)",

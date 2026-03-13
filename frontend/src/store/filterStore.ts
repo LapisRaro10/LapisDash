@@ -25,7 +25,7 @@ function getDefaultDateRange(): { start: string; end: string } {
   }
 }
 
-interface FilterState {
+export interface FilterState {
   dateRange: { start: string; end: string }
   selectedClients: string[]
   selectedTeams: string[]
@@ -43,7 +43,8 @@ interface FilterState {
   clearAll: () => void
 }
 
-export const useFilterStore = create<FilterState>((set) => ({
+// Store para o dashboard de Clientes
+export const useClientesFilterStore = create<FilterState>((set) => ({
   dateRange: getDefaultDateRange(),
   selectedClients: [],
   selectedTeams: [],
@@ -149,3 +150,222 @@ export const useFilterStore = create<FilterState>((set) => ({
       selectedProjects: [],
     }),
 }))
+
+// Store para o dashboard de Projetos
+export const useProjetosFilterStore = create<FilterState>((set) => ({
+  dateRange: getDefaultDateRange(),
+  selectedClients: [],
+  selectedTeams: [],
+  selectedSquads: [],
+  selectedUsers: [],
+  selectedProjects: [],
+
+  setDateRange: (start, end) =>
+    set({ dateRange: { start, end } }),
+
+  setSelectedClients: (clients) => set({ selectedClients: clients }),
+
+  setDatePreset: (preset) => {
+    if (preset === "este_mes") {
+      set({ dateRange: getDefaultDateRange() })
+      return
+    }
+    const today = getToday()
+    let start: Date
+    let end: Date
+    switch (preset) {
+      case "mes_passado":
+        start = startOfMonth(subMonths(today, 1))
+        end = endOfMonth(subMonths(today, 1))
+        break
+      case "ultimos_7":
+        start = subDays(today, 6)
+        end = today
+        break
+      case "ultimos_30":
+        start = subDays(today, 29)
+        end = today
+        break
+      case "este_trimestre":
+        start = startOfQuarter(today)
+        end = today
+        break
+      case "trimestre_passado": {
+        const lastQuarter = subQuarters(today, 1)
+        start = startOfQuarter(lastQuarter)
+        end = endOfQuarter(lastQuarter)
+        break
+      }
+      case "este_ano":
+        start = startOfYear(today)
+        end = today
+        break
+      case "personalizado":
+        return
+      default:
+        return
+    }
+    set({
+      dateRange: {
+        start: format(start, "yyyy-MM-dd"),
+        end: format(end, "yyyy-MM-dd"),
+      },
+    })
+  },
+
+  toggleClient: (id) =>
+    set((s) => ({
+      selectedClients: s.selectedClients.includes(id)
+        ? s.selectedClients.filter((c) => c !== id)
+        : [...s.selectedClients, id],
+    })),
+
+  toggleTeam: (id) =>
+    set((s) => ({
+      selectedTeams: s.selectedTeams.includes(id)
+        ? s.selectedTeams.filter((t) => t !== id)
+        : [...s.selectedTeams, id],
+    })),
+
+  toggleSquad: (id) =>
+    set((s) => ({
+      selectedSquads: s.selectedSquads.includes(id)
+        ? s.selectedSquads.filter((q) => q !== id)
+        : [...s.selectedSquads, id],
+    })),
+
+  toggleUser: (id) =>
+    set((s) => ({
+      selectedUsers: s.selectedUsers.includes(id)
+        ? s.selectedUsers.filter((u) => u !== id)
+        : [...s.selectedUsers, id],
+    })),
+
+  toggleProject: (id) =>
+    set((s) => ({
+      selectedProjects: s.selectedProjects.includes(id)
+        ? s.selectedProjects.filter((p) => p !== id)
+        : [...s.selectedProjects, id],
+    })),
+
+  clearAll: () =>
+    set({
+      dateRange: getDefaultDateRange(),
+      selectedClients: [],
+      selectedTeams: [],
+      selectedSquads: [],
+      selectedUsers: [],
+      selectedProjects: [],
+    }),
+}))
+
+// Store para o dashboard de Produtividade
+export const useProdutividadeFilterStore = create<FilterState>((set) => ({
+  dateRange: getDefaultDateRange(),
+  selectedClients: [],
+  selectedTeams: [],
+  selectedSquads: [],
+  selectedUsers: [],
+  selectedProjects: [],
+
+  setDateRange: (start, end) =>
+    set({ dateRange: { start, end } }),
+
+  setSelectedClients: (clients) => set({ selectedClients: clients }),
+
+  setDatePreset: (preset) => {
+    if (preset === "este_mes") {
+      set({ dateRange: getDefaultDateRange() })
+      return
+    }
+    const today = getToday()
+    let start: Date
+    let end: Date
+    switch (preset) {
+      case "mes_passado":
+        start = startOfMonth(subMonths(today, 1))
+        end = endOfMonth(subMonths(today, 1))
+        break
+      case "ultimos_7":
+        start = subDays(today, 6)
+        end = today
+        break
+      case "ultimos_30":
+        start = subDays(today, 29)
+        end = today
+        break
+      case "este_trimestre":
+        start = startOfQuarter(today)
+        end = today
+        break
+      case "trimestre_passado": {
+        const lastQuarter = subQuarters(today, 1)
+        start = startOfQuarter(lastQuarter)
+        end = endOfQuarter(lastQuarter)
+        break
+      }
+      case "este_ano":
+        start = startOfYear(today)
+        end = today
+        break
+      case "personalizado":
+        return
+      default:
+        return
+    }
+    set({
+      dateRange: {
+        start: format(start, "yyyy-MM-dd"),
+        end: format(end, "yyyy-MM-dd"),
+      },
+    })
+  },
+
+  toggleClient: (id) =>
+    set((s) => ({
+      selectedClients: s.selectedClients.includes(id)
+        ? s.selectedClients.filter((c) => c !== id)
+        : [...s.selectedClients, id],
+    })),
+
+  toggleTeam: (id) =>
+    set((s) => ({
+      selectedTeams: s.selectedTeams.includes(id)
+        ? s.selectedTeams.filter((t) => t !== id)
+        : [...s.selectedTeams, id],
+    })),
+
+  toggleSquad: (id) =>
+    set((s) => ({
+      selectedSquads: s.selectedSquads.includes(id)
+        ? s.selectedSquads.filter((q) => q !== id)
+        : [...s.selectedSquads, id],
+    })),
+
+  toggleUser: (id) =>
+    set((s) => ({
+      selectedUsers: s.selectedUsers.includes(id)
+        ? s.selectedUsers.filter((u) => u !== id)
+        : [...s.selectedUsers, id],
+    })),
+
+  toggleProject: (id) =>
+    set((s) => ({
+      selectedProjects: s.selectedProjects.includes(id)
+        ? s.selectedProjects.filter((p) => p !== id)
+        : [...s.selectedProjects, id],
+    })),
+
+  clearAll: () =>
+    set({
+      dateRange: getDefaultDateRange(),
+      selectedClients: [],
+      selectedTeams: [],
+      selectedSquads: [],
+      selectedUsers: [],
+      selectedProjects: [],
+    }),
+}))
+
+// Mantém o store antigo para compatibilidade (pode ser removido depois se não for usado em outros lugares)
+export const useFilterStore = useClientesFilterStore

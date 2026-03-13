@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import type { CSSProperties } from "react"
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,6 +16,7 @@ import { Clock, Target, FileCheck, TrendingUp, Download } from "lucide-react"
 import { useClientsSummary } from "@/hooks/useClients"
 import { useSquadsWithCount } from "@/hooks/useAdmin"
 import { FilterBar } from "@/components/layout/FilterBar"
+import { useClientesFilterStore } from "@/store/filterStore"
 import { KPICard } from "@/components/layout/KPICard"
 import {
   formatHoursDecimal,
@@ -105,9 +107,9 @@ function KpiTitleWithTooltip({
               zIndex: 50,
               boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
               maxWidth: 300,
-              whiteSpace: "normal",
+              whiteSpace: "normal" as const,
               lineHeight: 1.5,
-            }}
+            } as CSSProperties}
           >
             {text}
           </div>
@@ -118,7 +120,15 @@ function KpiTitleWithTooltip({
 }
 
 export default function DashboardClientesPage() {
-  const { data = [], isPending } = useClientsSummary()
+  const filterStore = useClientesFilterStore()
+  const filters = {
+    dateRange: filterStore.dateRange,
+    selectedSquads: filterStore.selectedSquads,
+    selectedTeams: filterStore.selectedTeams,
+    selectedUsers: filterStore.selectedUsers,
+    selectedClients: filterStore.selectedClients,
+  }
+  const { data = [], isPending } = useClientsSummary(filters)
   const { data: squads = [] } = useSquadsWithCount()
   const [search, setSearch] = useState("")
   const [sortField, setSortField] = useState<SortField>("realized_hours")
@@ -269,6 +279,7 @@ export default function DashboardClientesPage() {
         showTeam
         showUser
         showClient
+        useFilterStore={() => filterStore}
       />
 
       <div className="mb-6 grid grid-cols-4 gap-4">
@@ -339,6 +350,7 @@ export default function DashboardClientesPage() {
             />
             <YAxis tick={{ fill: "var(--text-secondary)" }} />
             <Tooltip
+              cursor={false}
               content={({ active, payload, label }) => {
                 if (!active || !payload) return null
                 return (
