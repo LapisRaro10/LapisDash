@@ -47,36 +47,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-// Mapa de cores dinâmico baseado no campo color do squad
-const COLOR_MAP: Record<string, string> = {
-  green: "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-500/30",
-  blue: "bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-500/30",
-  red: "bg-red-500/20 text-red-800 dark:text-red-200 border-red-500/30",
-  amber: "bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/30",
-  purple: "bg-purple-500/20 text-purple-800 dark:text-purple-200 border-purple-500/30",
-  pink: "bg-pink-500/20 text-pink-800 dark:text-pink-200 border-pink-500/30",
-  gray: "bg-gray-500/20 text-gray-800 dark:text-gray-200 border-gray-500/30",
-  orange: "bg-orange-500/20 text-orange-800 dark:text-orange-200 border-orange-500/30",
-}
-
-const COLOR_OPTIONS = [
-  { value: "green", label: "Verde" },
-  { value: "blue", label: "Azul" },
-  { value: "red", label: "Vermelho" },
-  { value: "amber", label: "Amarelo" },
-  { value: "purple", label: "Roxo" },
-  { value: "pink", label: "Rosa" },
-  { value: "gray", label: "Cinza" },
-  { value: "orange", label: "Laranja" },
-]
-
-const defaultSquadClass = "bg-muted text-muted-foreground"
-
-function getSquadBadgeClass(color: string | null): string {
-  if (!color) return defaultSquadClass
-  return COLOR_MAP[color] ?? defaultSquadClass
-}
+import { getSquadBadgeClass, SQUAD_COLOR_OPTIONS } from "@/lib/squadColors"
 
 type ToastState = { message: string; open: boolean }
 
@@ -417,7 +388,7 @@ export default function AdminClientesPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {COLOR_OPTIONS.map((opt) => (
+                              {SQUAD_COLOR_OPTIONS.map((opt) => (
                                 <SelectItem key={opt.value} value={opt.value}>
                                   {opt.label}
                                 </SelectItem>
@@ -839,7 +810,7 @@ export default function AdminClientesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COLOR_OPTIONS.map((opt) => (
+                  {SQUAD_COLOR_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>

@@ -13,6 +13,7 @@ import {
 } from "recharts"
 import { Clock, Target, FileCheck, TrendingUp, Download } from "lucide-react"
 import { useClientsSummary } from "@/hooks/useClients"
+import { useSquadsWithCount } from "@/hooks/useAdmin"
 import { FilterBar } from "@/components/layout/FilterBar"
 import { KPICard } from "@/components/layout/KPICard"
 import {
@@ -32,20 +33,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-
-const SQUAD_COLORS: Record<string, string> = {
-  verde: "#22c55e",
-  azul: "#3b82f6",
-  vermelho: "#ef4444",
-  prospecção: "#a855f7",
-  transversal: "#f59e0b",
-}
-
-function getSquadColor(squadName: string | null): string {
-  if (!squadName) return "#8C8279"
-  const key = squadName.toLowerCase().trim()
-  return SQUAD_COLORS[key] ?? "#8C8279"
-}
+import { getSquadHexColor } from "@/lib/squadColors"
 
 function executionColor(percent: number): string {
   if (percent >= 90) return "#22c55e"
@@ -131,10 +119,26 @@ function KpiTitleWithTooltip({
 
 export default function DashboardClientesPage() {
   const { data = [], isPending } = useClientsSummary()
+  const { data: squads = [] } = useSquadsWithCount()
   const [search, setSearch] = useState("")
   const [sortField, setSortField] = useState<SortField>("realized_hours")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [tooltip, setTooltip] = useState<string | null>(null)
+
+  // Mapa de squad_name para color
+  const squadColorMap = useMemo(() => {
+    const map = new Map<string, string | null>()
+    for (const squad of squads) {
+      map.set(squad.name, squad.color)
+    }
+    return map
+  }, [squads])
+
+  const getSquadColor = (squadName: string | null): string => {
+    if (!squadName) return getSquadHexColor(null)
+    const color = squadColorMap.get(squadName) ?? null
+    return getSquadHexColor(color)
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

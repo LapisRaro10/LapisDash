@@ -11,6 +11,7 @@ import {
   useDeleteAllocation,
   useSquadsWithCount,
 } from "@/hooks/useAdmin"
+import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,37 +35,16 @@ const QUARTERS = [
   { value: "2026-Q4", label: "2026-Q4" },
 ] as const
 
-// Mapa de cores dinâmico baseado no campo color do squad
-const COLOR_TO_BG: Record<string, string> = {
-  green: "rgba(34, 197, 94, 0.15)",
-  blue: "rgba(59, 130, 246, 0.15)",
-  red: "rgba(239, 68, 68, 0.15)",
-  amber: "rgba(245, 158, 11, 0.15)",
-  purple: "rgba(168, 85, 247, 0.15)",
-  pink: "rgba(236, 72, 153, 0.15)",
-  gray: "rgba(107, 114, 128, 0.15)",
-  orange: "rgba(249, 115, 22, 0.15)",
-}
-
-const COLOR_TO_BORDER: Record<string, string> = {
-  green: "#22c55e",
-  blue: "#3b82f6",
-  red: "#ef4444",
-  amber: "#f59e0b",
-  purple: "#a855f7",
+// Cores do header por squad (campo `color` do banco)
+const colorClasses: Record<string, string> = {
+  green: "#16a34a",
+  blue: "#2563eb",
+  red: "#dc2626",
   pink: "#ec4899",
-  gray: "#6b7280",
+  yellow: "#eab308",
   orange: "#f97316",
-}
-
-function getSquadHeaderBg(color: string | null): string {
-  if (!color) return "rgba(42,42,42,0.5)"
-  return COLOR_TO_BG[color] ?? "rgba(42,42,42,0.5)"
-}
-
-function getSquadBorder(color: string | null): string {
-  if (!color) return "#2a2a2a"
-  return COLOR_TO_BORDER[color] ?? "#2a2a2a"
+  purple: "#9333ea",
+  gray: "#374151",
 }
 
 function cellKey(collaboratorId: string, clientGroupId: number): string {
@@ -81,9 +61,8 @@ type EditingCell = { collaboratorId: string; clientGroupId: number } | null
 
 /** Agrupa clientes por squad para header duplo. Retorna { squadKey, squadName, squadColor, squadBorder, clients }[] e clients sem squad no final. */
 function groupClientsBySquad(
-  clientGroups: ClientGroup[],
-  squadColorMap: Map<number, string | null>
-): { squadKey: string; squadName: string; squadColor: string | null; squadBorder: string; clients: ClientGroup[] }[] {
+  clientGroups: Array<ClientGroup & { squad_color?: string | null }>
+): { squadKey: string; squadName: string; squadColor: string; squadBorder: string; clients: ClientGroup[] }[] {
   const bySquad = new Map<string, ClientGroup[]>()
   const noSquad: ClientGroup[] = []
   for (const g of clientGroups) {
@@ -95,23 +74,31 @@ function groupClientsBySquad(
       noSquad.push(g)
     }
   }
-  const result: { squadKey: string; squadName: string; squadColor: string | null; squadBorder: string; clients: ClientGroup[] }[] = []
+  const result: { squadKey: string; squadName: string; squadColor: string; squadBorder: string; clients: ClientGroup[] }[] = []
   bySquad.forEach((clients, key) => {
     const name = clients[0]!.squad_name!
-    const squadId = clients[0]!.squad_id!
-    const color = squadColorMap.get(squadId) ?? null
+    const color = (clients[0] as ClientGroup & { squad_color?: string | null }).squad_color ?? "gray"
     result.push({
       squadKey: key,
       squadName: name,
       squadColor: color,
-      squadBorder: getSquadBorder(color),
+      squadBorder: colorClasses[color] ?? colorClasses.gray,
       clients: clients.sort((a, b) => a.unified_name.localeCompare(b.unified_name)),
     })
   })
-  result.sort((a, b) => a.squadName.localeCompare(b.squadName))
+
+  // Ordenação solicitada: Verde, Azul, Vermelho, outros, e sem squad por último
+  const priority: Record<string, number> = { verde: 0, azul: 1, vermelho: 2 }
+  result.sort((a, b) => {
+    const pa = priority[a.squadName.toLowerCase().trim()] ?? 100
+    const pb = priority[b.squadName.toLowerCase().trim()] ?? 100
+    if (pa !== pb) return pa - pb
+    return a.squadName.localeCompare(b.squadName)
+  })
+
   if (noSquad.length > 0) {
     noSquad.sort((a, b) => a.unified_name.localeCompare(b.unified_name))
-    result.push({ squadKey: "none", squadName: "SEM SQ.", squadColor: null, squadBorder: "#2a2a2a", clients: noSquad })
+    result.push({ squadKey: "none", squadName: "SEM SQ.", squadColor: "gray", squadBorder: "#2a2a2a", clients: noSquad })
   }
   return result
 }
@@ -128,6 +115,7 @@ export default function AdminAlocacoesPage() {
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const bottomScrollRef = useRef<HTMLDivElement>(null)
   const [scrollWidth, setScrollWidth] = useState(0)
+  const [squadData, setSquadData] = useState<Array<{ client_group_id: number; squads: unknown }> | null>(null)
 
   const period = periodValue || ""
   const { data: clientGroups = [], isLoading: loadingGroups } = useClientGroups()
@@ -147,28 +135,81 @@ export default function AdminAlocacoesPage() {
     return map
   }, [allocationsWithId])
 
-  const squadColorMap = useMemo(() => {
-    const map = new Map<number, string | null>()
-    for (const s of squadsWithCount) {
-      map.set(s.id, s.color)
+  // Buscar squads por client_group via squad_client_assignments (fonte de verdade para o cruzamento)
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      try {
+        const supabase = createBrowserSupabaseClient()
+        const { data: squadDataRows, error } = await supabase
+          .from("squad_client_assignments")
+          .select("client_group_id, squads(id, name, color)")
+        if (error) throw error
+        if (cancelled) return
+        setSquadData((squadDataRows ?? []) as Array<{ client_group_id: number; squads: unknown }>)
+        // DEBUG temporário
+        console.log("squadData:", squadDataRows)
+      } catch (e) {
+        if (cancelled) return
+        setSquadData([])
+        console.log("squadData: erro ao buscar", e)
+      }
     }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const clientSquadMap = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; color: string | null } | null>()
+    for (const row of squadData ?? []) {
+      const raw = (row as { client_group_id: number; squads: unknown }).squads as unknown
+      const squad = Array.isArray(raw) ? raw[0] : raw
+      if (squad && typeof squad === "object") {
+        const s = squad as { id?: number; name?: string; color?: string | null }
+        if (typeof s.id === "number" && typeof s.name === "string") {
+          map.set(row.client_group_id, { id: s.id, name: s.name, color: s.color ?? null })
+          continue
+        }
+      }
+      map.set(row.client_group_id, null)
+    }
+    // DEBUG temporário
+    console.log("clientSquadMap:", map)
     return map
-  }, [squadsWithCount])
+  }, [squadData])
 
-  const squadGroups = useMemo(() => groupClientsBySquad(clientGroups, squadColorMap), [clientGroups, squadColorMap])
+  const enrichedClientGroups = useMemo(() => {
+    return clientGroups.map((cg) => {
+      const squad = clientSquadMap.get(cg.id) ?? null
+      return {
+        ...cg,
+        squad_id: squad?.id ?? null,
+        squad_name: squad?.name ?? null,
+        squad_color: squad?.color ?? "gray",
+      }
+    })
+  }, [clientGroups, clientSquadMap])
 
-  const filteredSquadGroups = useMemo(() => {
-    if (squadFilter === "all") return squadGroups
-    return squadGroups.filter((sg) => sg.squadKey === squadFilter)
-  }, [squadGroups, squadFilter])
+  // Filtrar clientGroups por squad quando um squad é selecionado
+  const filteredClientGroups = useMemo(() => {
+    if (squadFilter === "all") return enrichedClientGroups
+    const squadId = Number(squadFilter)
+    if (Number.isNaN(squadId)) return enrichedClientGroups
+    return enrichedClientGroups.filter((cg) => cg.squad_id === squadId)
+  }, [enrichedClientGroups, squadFilter])
 
+  const squadGroups = useMemo(() => groupClientsBySquad(filteredClientGroups as Array<ClientGroup & { squad_color?: string | null }>), [filteredClientGroups])
+
+  // Opções do filtro: Todos + todos os squads da tabela squads
   const squadOptions = useMemo(() => {
     const options = [{ value: "all", label: "Todos" }]
-    squadGroups.forEach((sg) => {
-      options.push({ value: sg.squadKey, label: sg.squadName })
-    })
+    for (const squad of squadsWithCount) {
+      options.push({ value: String(squad.id), label: squad.name })
+    }
     return options
-  }, [squadGroups])
+  }, [squadsWithCount])
 
   const filteredCollaborators = useMemo(() => {
     const term = searchCollaborator.trim().toLowerCase()
@@ -204,7 +245,7 @@ export default function AdminAlocacoesPage() {
     const obs = new ResizeObserver(sync)
     obs.observe(el)
     return () => obs.disconnect()
-  }, [filteredSquadGroups, filteredCollaborators])
+  }, [squadGroups, filteredCollaborators])
 
   const getCellValue = useCallback((collaboratorId: string, clientGroupId: number) => localMatrix[cellKey(collaboratorId, clientGroupId)] ?? 0, [localMatrix])
 
@@ -212,7 +253,7 @@ export default function AdminAlocacoesPage() {
     const total: Record<string, number> = {}
     for (const c of filteredCollaborators) {
       let sum = 0
-      for (const sg of filteredSquadGroups) {
+      for (const sg of squadGroups) {
         for (const g of sg.clients) {
           sum += getCellValue(c.id, g.id)
         }
@@ -220,7 +261,7 @@ export default function AdminAlocacoesPage() {
       total[c.id] = sum
     }
     return total
-  }, [filteredCollaborators, filteredSquadGroups, getCellValue])
+  }, [filteredCollaborators, squadGroups, getCellValue])
 
   const remainingForCell = useCallback(
     (collaboratorId: string, clientGroupId: number) => {
@@ -235,7 +276,7 @@ export default function AdminAlocacoesPage() {
 
   const horasAvailableByClient = useMemo(() => {
     const byClient: Record<number, number> = {}
-    for (const sg of filteredSquadGroups) {
+    for (const sg of squadGroups) {
       for (const g of sg.clients) {
         let sum = 0
         for (const c of filteredCollaborators) {
@@ -246,11 +287,11 @@ export default function AdminAlocacoesPage() {
       }
     }
     return byClient
-  }, [filteredSquadGroups, filteredCollaborators, getCellValue])
+  }, [squadGroups, filteredCollaborators, getCellValue])
 
   const totalHoursBySquad = useMemo(() => {
     const bySquad: Record<string, number> = {}
-    for (const sg of filteredSquadGroups) {
+    for (const sg of squadGroups) {
       let sum = 0
       for (const g of sg.clients) {
         sum += horasAvailableByClient[g.id] ?? 0
@@ -258,7 +299,7 @@ export default function AdminAlocacoesPage() {
       bySquad[sg.squadKey] = sum
     }
     return bySquad
-  }, [filteredSquadGroups, horasAvailableByClient])
+  }, [squadGroups, horasAvailableByClient])
 
   const totalHorasAvailable = useMemo(() => {
     return Object.values(horasAvailableByClient).reduce((a, b) => a + b, 0)
@@ -284,7 +325,7 @@ export default function AdminAlocacoesPage() {
 
     const allPairs: { collaboratorId: string; clientGroupId: number }[] = []
     for (const c of filteredCollaborators) {
-      for (const sg of filteredSquadGroups) {
+      for (const sg of squadGroups) {
         for (const g of sg.clients) {
           allPairs.push({ collaboratorId: c.id, clientGroupId: g.id })
         }
@@ -340,7 +381,7 @@ export default function AdminAlocacoesPage() {
     period,
     overAllocatedCount,
     filteredCollaborators,
-    filteredSquadGroups,
+    squadGroups,
     localMatrix,
     allocationMap,
     createAlloc,
@@ -482,13 +523,14 @@ export default function AdminAlocacoesPage() {
                 >
                   Total
                 </TableHead>
-                {filteredSquadGroups.map((sg) => (
+                {squadGroups.map((sg) => (
                   <TableHead
                     key={sg.squadKey}
                     colSpan={sg.clients.length}
-                    className="border-[#2a2a2a] text-center font-semibold text-[#e5e5e5]"
+                    className="border-[#2a2a2a] text-center font-semibold"
                     style={{
-                      backgroundColor: getSquadHeaderBg(sg.squadColor),
+                      backgroundColor: colorClasses[sg.squadColor] || colorClasses.gray,
+                      color: "white",
                       borderLeft: `2px solid ${sg.squadBorder}`,
                       minWidth: sg.clients.length * COL_WIDTH,
                     }}
@@ -500,11 +542,16 @@ export default function AdminAlocacoesPage() {
               <TableRow className="border-[#2a2a2a] hover:bg-transparent">
                 <TableHead className="sticky left-0 z-20 border-r border-[#2a2a2a] bg-[#0e0e0e] py-1.5" style={{ width: NAME_WIDTH }} />
                 <TableHead className="sticky z-20 border-r-2 border-[#333] bg-[#0e0e0e] py-1.5" style={{ left: NAME_WIDTH, width: 72, minWidth: 72 }} />
-                {filteredSquadGroups.map((sg) =>
+                {squadGroups.map((sg) =>
                   sg.clients.map((g) => (
                     <TableHead
                       key={g.id}
-                      className="w-[100px] min-w-[100px] border-[#2a2a2a] bg-[#0e0e0e] py-1.5 text-center text-xs font-medium text-[#8C8279]"
+                      className="w-[100px] min-w-[100px] border-[#2a2a2a] py-1.5 text-center text-xs font-medium"
+                      style={{
+                        backgroundColor:
+                          colorClasses[((g as ClientGroup & { squad_color?: string | null }).squad_color ?? "gray")] || colorClasses.gray,
+                        color: "white",
+                      }}
                     >
                       {g.unified_name}
                     </TableHead>
@@ -545,7 +592,7 @@ export default function AdminAlocacoesPage() {
                         </div>
                       </div>
                     </TableCell>
-                    {filteredSquadGroups.map((sg) =>
+                    {squadGroups.map((sg) =>
                       sg.clients.map((g) => {
                         const value = getCellValue(c.id, g.id)
                         const remaining = remainingForCell(c.id, g.id)
@@ -621,7 +668,7 @@ export default function AdminAlocacoesPage() {
                 >
                   {totalHorasAvailable.toFixed(0)}h
                 </TableCell>
-                {filteredSquadGroups.map((sg) =>
+                {squadGroups.map((sg) =>
                   sg.clients.map((g) => (
                     <TableCell
                       key={g.id}
@@ -639,14 +686,15 @@ export default function AdminAlocacoesPage() {
                   colSpan={2}
                   style={{ width: NAME_WIDTH + 72, minWidth: NAME_WIDTH + 72 }}
                 />
-                {filteredSquadGroups.map((sg) => (
+                {squadGroups.map((sg) => (
                   <TableCell
                     key={sg.squadKey}
                     colSpan={sg.clients.length}
-                    className="border-[#2a2a2a] py-1 text-center text-xs font-semibold text-[#8C8279]"
+                    className="border-[#2a2a2a] py-1 text-center text-xs font-semibold"
                     style={{
                       borderLeft: `2px solid ${sg.squadBorder}`,
-                      backgroundColor: getSquadHeaderBg(sg.squadColor),
+                      backgroundColor: colorClasses[sg.squadColor] || colorClasses.gray,
+                      color: "white",
                     }}
                   >
                     Total por Squad: {(totalHoursBySquad[sg.squadKey] ?? 0).toFixed(0)}h
