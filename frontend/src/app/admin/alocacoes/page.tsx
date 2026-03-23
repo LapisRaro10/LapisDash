@@ -10,6 +10,8 @@ import {
   useUpdateAllocation,
   useDeleteAllocation,
   useSquadsWithCount,
+  usePeriodLock,
+  useTogglePeriodLock,
 } from "@/hooks/useAdmin"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
@@ -23,16 +25,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Save, AlertTriangle } from "lucide-react"
+import { Save, AlertTriangle, Lock, Unlock, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ClientGroup } from "@/types"
 
 const QUARTERS = [
   { value: "2025-Q4", label: "2025-Q4" },
+  { value: "2026-BZ", label: "Base Zero 2026" },
   { value: "2026-Q1", label: "2026-Q1" },
   { value: "2026-Q2", label: "2026-Q2" },
   { value: "2026-Q3", label: "2026-Q3" },
   { value: "2026-Q4", label: "2026-Q4" },
+  { value: "2027-BZ", label: "Base Zero 2027" },
+  { value: "2027-Q1", label: "2027-Q1" },
+  { value: "2027-Q2", label: "2027-Q2" },
+  { value: "2027-Q3", label: "2027-Q3" },
+  { value: "2027-Q4", label: "2027-Q4" },
 ] as const
 
 // Cores do header por squad (campo `color` do banco)
@@ -122,6 +130,10 @@ export default function AdminAlocacoesPage() {
   const { data: collaborators = [], isLoading: loadingCollab } = useCollaborators()
   const { data: allocationsWithId = [], isLoading: loadingAlloc } = useAllAllocationsWithId(period)
   const { data: squadsWithCount = [] } = useSquadsWithCount()
+
+  const { data: periodLockData } = usePeriodLock(period)
+  const toggleLock = useTogglePeriodLock()
+  const isPeriodLocked = periodLockData?.is_locked ?? false
 
   const createAlloc = useCreateAllocation()
   const updateAlloc = useUpdateAllocation()
@@ -317,7 +329,7 @@ export default function AdminAlocacoesPage() {
   }, [])
 
   const handleSave = useCallback(async () => {
-    if (!period) return
+    if (!period || isPeriodLocked) return
     if (overAllocatedCount > 0) {
       showToast(`${overAllocatedCount} colaborador(es) sobre-alocados. Corrija antes de salvar.`)
       return
@@ -379,6 +391,7 @@ export default function AdminAlocacoesPage() {
     showToast("Alocações salvas com sucesso.")
   }, [
     period,
+    isPeriodLocked,
     overAllocatedCount,
     filteredCollaborators,
     squadGroups,
@@ -390,6 +403,192 @@ export default function AdminAlocacoesPage() {
     queryClient,
     showToast,
   ])
+
+  const handleExportExcel = useCallback(async () => {
+    const ExcelJS = (await import("exceljs")).default
+
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet("Available")
+
+    const white = { color: { argb: "FFFFFFFF" }, bold: true, size: 10 } as const
+    const thinBorder = {
+      top: { style: "thin" as const, color: { argb: "FF2A2A2A" } },
+      bottom: { style: "thin" as const, color: { argb: "FF2A2A2A" } },
+      left: { style: "thin" as const, color: { argb: "FF2A2A2A" } },
+      right: { style: "thin" as const, color: { argb: "FF2A2A2A" } },
+    }
+
+    const hexToArgb = (hex: string) => "FF" + hex.replace("#", "")
+
+    // -- Build flat column list --
+    const clientCols: { client: ClientGroup; squadColor: string; squadName: string }[] = []
+    for (const sg of squadGroups) {
+      for (const g of sg.clients) {
+        clientCols.push({ client: g, squadColor: sg.squadColor, squadName: sg.squadName })
+      }
+    }
+
+    // -- Row 1: Squad headers --
+    const row1 = ws.getRow(1)
+    row1.getCell(1).value = "Colaborador"
+    row1.getCell(1).font = { bold: true, size: 10, color: { argb: "FFE5E5E5" } }
+    row1.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } }
+    row1.getCell(1).border = thinBorder
+    row1.getCell(2).value = "Total"
+    row1.getCell(2).font = { bold: true, size: 10, color: { argb: "FFE5E5E5" } }
+    row1.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } }
+    row1.getCell(2).border = thinBorder
+    row1.getCell(2).alignment = { horizontal: "center" }
+
+    let colIdx = 3
+    for (const sg of squadGroups) {
+      const startCol = colIdx
+      const endCol = colIdx + sg.clients.length - 1
+      const argb = hexToArgb(colorClasses[sg.squadColor] || colorClasses.gray)
+      if (sg.clients.length > 1) {
+        ws.mergeCells(1, startCol, 1, endCol)
+      }
+      const cell = row1.getCell(startCol)
+      cell.value = sg.squadName
+      cell.font = white
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } }
+      cell.alignment = { horizontal: "center" }
+      cell.border = thinBorder
+      colIdx = endCol + 1
+    }
+
+    // -- Row 2: Client names --
+    const row2 = ws.getRow(2)
+    row2.getCell(1).value = ""
+    row2.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    row2.getCell(1).border = thinBorder
+    row2.getCell(2).value = ""
+    row2.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    row2.getCell(2).border = thinBorder
+    for (let i = 0; i < clientCols.length; i++) {
+      const cell = row2.getCell(i + 3)
+      const argb = hexToArgb(colorClasses[clientCols[i].squadColor] || colorClasses.gray)
+      cell.value = clientCols[i].client.unified_name
+      cell.font = { color: { argb: "FFFFFFFF" }, size: 9 }
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } }
+      cell.alignment = { horizontal: "center" }
+      cell.border = thinBorder
+    }
+
+    // -- Data rows --
+    let rowIdx = 3
+    for (const c of filteredCollaborators) {
+      const row = ws.getRow(rowIdx)
+      const total = totalByRow[c.id] ?? 0
+      const horasMesCollab = horasMes(c.shift_work_time_per_week)
+
+      // Name
+      const nameCell = row.getCell(1)
+      nameCell.value = `${c.name} (${horasMesCollab.toFixed(1)}h/mês)`
+      nameCell.font = { size: 10, color: { argb: "FFE5E5E5" } }
+      nameCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A1A1A" } }
+      nameCell.border = thinBorder
+
+      // Total
+      const totalCell = row.getCell(2)
+      totalCell.value = `${Math.round(total)}%`
+      totalCell.alignment = { horizontal: "center" }
+      totalCell.border = thinBorder
+      if (total > 100) {
+        totalCell.font = { bold: true, size: 10, color: { argb: "FFF87171" } }
+        totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "33EF4444" } }
+      } else if (total === 100) {
+        totalCell.font = { bold: true, size: 10, color: { argb: "FF4ADE80" } }
+        totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "3322C55E" } }
+      } else {
+        totalCell.font = { size: 10, color: { argb: "FFE5E5E5" } }
+        totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2A2A2A" } }
+      }
+
+      // Allocation cells
+      for (let i = 0; i < clientCols.length; i++) {
+        const cell = row.getCell(i + 3)
+        const value = getCellValue(c.id, clientCols[i].client.id)
+        cell.alignment = { horizontal: "center" }
+        cell.border = thinBorder
+        if (value > 0) {
+          cell.value = `${value}%`
+          cell.font = { bold: true, size: 10, color: { argb: "FFE5E5E5" } }
+          const alpha = Math.round(Math.min(0.45, 0.1 + value / 250) * 255).toString(16).padStart(2, "0").toUpperCase()
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `${alpha}8B1A4A` } }
+        } else {
+          cell.value = ""
+          cell.font = { size: 10, color: { argb: "FF737373" } }
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF141414" } }
+        }
+      }
+      rowIdx++
+    }
+
+    // -- Footer: Horas Available --
+    const footerRow = ws.getRow(rowIdx)
+    footerRow.getCell(1).value = "Hs Available / mês"
+    footerRow.getCell(1).font = { bold: true, size: 10, color: { argb: "FF8C8279" } }
+    footerRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    footerRow.getCell(1).border = thinBorder
+    footerRow.getCell(2).value = `${totalHorasAvailable.toFixed(0)}h`
+    footerRow.getCell(2).font = { bold: true, size: 10, color: { argb: "FFE5E5E5" } }
+    footerRow.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    footerRow.getCell(2).alignment = { horizontal: "center" }
+    footerRow.getCell(2).border = thinBorder
+    for (let i = 0; i < clientCols.length; i++) {
+      const cell = footerRow.getCell(i + 3)
+      cell.value = `${(horasAvailableByClient[clientCols[i].client.id] ?? 0).toFixed(0)}h`
+      cell.font = { size: 10, color: { argb: "FFE5E5E5" } }
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+      cell.alignment = { horizontal: "center" }
+      cell.border = thinBorder
+    }
+    rowIdx++
+
+    // -- Footer: Total por Squad --
+    const squadFooter = ws.getRow(rowIdx)
+    squadFooter.getCell(1).value = ""
+    squadFooter.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    squadFooter.getCell(1).border = thinBorder
+    squadFooter.getCell(2).value = ""
+    squadFooter.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E0E0E" } }
+    squadFooter.getCell(2).border = thinBorder
+    let sqColIdx = 3
+    for (const sg of squadGroups) {
+      const startCol = sqColIdx
+      const endCol = sqColIdx + sg.clients.length - 1
+      const argb = hexToArgb(colorClasses[sg.squadColor] || colorClasses.gray)
+      if (sg.clients.length > 1) {
+        ws.mergeCells(rowIdx, startCol, rowIdx, endCol)
+      }
+      const cell = squadFooter.getCell(startCol)
+      cell.value = `Total: ${(totalHoursBySquad[sg.squadKey] ?? 0).toFixed(0)}h`
+      cell.font = white
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } }
+      cell.alignment = { horizontal: "center" }
+      cell.border = thinBorder
+      sqColIdx = endCol + 1
+    }
+
+    // -- Column widths --
+    ws.getColumn(1).width = 30
+    ws.getColumn(2).width = 10
+    for (let i = 0; i < clientCols.length; i++) {
+      ws.getColumn(i + 3).width = 14
+    }
+
+    // -- Export --
+    const periodLabel = QUARTERS.find((q) => q.value === periodValue)?.label ?? periodValue
+    const buf = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `Available_${periodLabel}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [squadGroups, filteredCollaborators, totalByRow, getCellValue, horasAvailableByClient, totalHorasAvailable, totalHoursBySquad, periodValue])
 
   const isLoading = loadingGroups || loadingCollab || loadingAlloc
   const COL_WIDTH = 100
@@ -423,6 +622,25 @@ export default function AdminAlocacoesPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => {
+              if (isPeriodLocked) {
+                toggleLock.mutate({ period, lock: false })
+              } else {
+                toggleLock.mutate({ period, lock: true })
+              }
+            }}
+            disabled={toggleLock.isPending}
+            title={isPeriodLocked ? "Período trancado — clique para destrancar" : "Período aberto — clique para trancar"}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+              isPeriodLocked
+                ? "border-[#ef4444]/50 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20"
+                : "border-[#2a2a2a] bg-[#1a1a1a] text-[#737373] hover:bg-[#2a2a2a] hover:text-[#e5e5e5]"
+            )}
+          >
+            {isPeriodLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground whitespace-nowrap">Squad</span>
@@ -447,16 +665,37 @@ export default function AdminAlocacoesPage() {
           />
         </div>
         {!isLoading && (
-          <Button
-            onClick={() => void handleSave()}
-            disabled={overAllocatedCount > 0 || createAlloc.isPending || updateAlloc.isPending || deleteAlloc.isPending}
-            className="h-9 bg-[#8B1A4A] text-white hover:bg-[#8B1A4A]/90"
-          >
-            <Save className="mr-2 h-4 w-4" />
-            Salvar
-          </Button>
+          <>
+            <Button
+              onClick={() => void handleSave()}
+              disabled={isPeriodLocked || overAllocatedCount > 0 || createAlloc.isPending || updateAlloc.isPending || deleteAlloc.isPending}
+              className="h-9 bg-[#8B1A4A] text-white hover:bg-[#8B1A4A]/90"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Salvar
+            </Button>
+            <Button
+              onClick={() => void handleExportExcel()}
+              variant="outline"
+              className="h-9 border-[#2a2a2a] bg-[#1a1a1a] text-[#e5e5e5] hover:bg-[#2a2a2a]"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Exportar Excel
+            </Button>
+          </>
         )}
       </div>
+
+      {isPeriodLocked && (
+        <Card className="border-[#f59e0b]/50 bg-[#f59e0b]/10">
+          <CardContent className="pt-4 flex items-center gap-2">
+            <Lock className="h-5 w-5 text-[#f59e0b] shrink-0" />
+            <p className="text-sm font-medium text-[#fbbf24]">
+              Período trancado. Clique no cadeado para destrancar e permitir alterações.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {overAllocatedCount > 0 && (
         <Card className="border-[#ef4444] bg-[#ef4444]/10">
@@ -597,7 +836,7 @@ export default function AdminAlocacoesPage() {
                         const value = getCellValue(c.id, g.id)
                         const remaining = remainingForCell(c.id, g.id)
                         const isEditing = editingCell?.collaboratorId === c.id && editingCell?.clientGroupId === g.id
-                        const isDisabled = remaining === 0 && value === 0
+                        const isDisabled = isPeriodLocked || (remaining === 0 && value === 0)
 
                         return (
                           <TableCell

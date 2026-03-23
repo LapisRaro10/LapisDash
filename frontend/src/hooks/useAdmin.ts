@@ -633,6 +633,45 @@ export function useDeletePricingParameter(
   })
 }
 
+// ---- Period locks ----
+
+export function usePeriodLock(period: string) {
+  const supabase = createBrowserSupabaseClient()
+  return useQuery({
+    queryKey: ["period-lock", period],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("period_locks")
+        .select("is_locked, locked_at")
+        .eq("period", period)
+        .maybeSingle()
+      if (error) throw error
+      return { is_locked: data?.is_locked ?? false, locked_at: data?.locked_at ?? null }
+    },
+    enabled: !!period,
+  })
+}
+
+export function useTogglePeriodLock() {
+  const qc = useQueryClient()
+  const supabase = createBrowserSupabaseClient()
+  return useMutation({
+    mutationFn: async ({ period, lock }: { period: string; lock: boolean }) => {
+      const { error } = await supabase
+        .from("period_locks")
+        .upsert({
+          period,
+          is_locked: lock,
+          locked_at: lock ? new Date().toISOString() : null,
+        }, { onConflict: "period" })
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["period-lock", variables.period] })
+    },
+  })
+}
+
 // ---- Squads management ----
 
 export function useSquadsWithCount() {
