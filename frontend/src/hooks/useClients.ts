@@ -141,20 +141,7 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
         return await query
       })
 
-      // DEBUG temporário: conferir totais e filtro de time
-      if (selectedTeams.length > 0) {
-        const totalRealized = rows.reduce((acc, r) => {
-          const h = r.hours_decimal != null && !Number.isNaN(Number(r.hours_decimal))
-            ? Number(r.hours_decimal)
-            : (Number(r.total_time) || 0) / 3600
-          return acc + h
-        }, 0)
-        console.log("[useClients] Filtro de time ativo:", {
-          selectedTeams,
-          registrosRetornados: rows.length,
-          horasRealizadasSoma: Math.round(totalRealized * 10) / 10,
-        })
-      }
+
 
       // Agrupa por client_name: soma em horas decimais (total_time está em SEGUNDOS → /3600; ou hours_decimal se existir)
       const realizedByClient = new Map<
@@ -202,31 +189,39 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
         shiftByCollaborator.set(c.id, Number(c.shift_work_time_per_week) || 0)
       }
 
-      // 3.5) Construir set de collaborator_ids permitidos pelos filtros de squad/team/user
+      // 3.5) Construir filtros de squad (por client_group_id) e team/user (por collaborator_id)
       let allowedCollaboratorIds: Set<string> | null = null // null = sem filtro, aceita todos
+      let allowedClientGroupIds: Set<number> | null = null // null = sem filtro de squad
 
-      if (selectedSquads.length > 0 || selectedTeams.length > 0 || selectedUsers.length > 0) {
-        // Buscar squad de cada colaborador
-        const { data: squadAssignments } = await supabase
-          .from("squad_collaborator_assignments")
-          .select("collaborator_id, squad_id, squads(name)")
-        const squadAssignmentRows = ((squadAssignments ?? []) as Array<{
-          collaborator_id: string
-          squad_id: number
-          squads: { name: string }[] | null
-        }>).map((sa) => ({
-          collaborator_id: sa.collaborator_id,
-          squad_id: sa.squad_id,
-          squads: Array.isArray(sa.squads) && sa.squads.length > 0
-            ? { name: sa.squads[0]!.name }
-            : null,
-        }))
-        const collabSquadMap = new Map<string, string>()
-        for (const sa of squadAssignmentRows) {
-          if (sa.squads?.name) collabSquadMap.set(sa.collaborator_id, sa.squads.name)
+      // Filtro de squad: associação é squad → cliente (squad_client_assignments), não squad → colaborador
+      if (selectedSquads.length > 0) {
+        const { data: squadsData } = await supabase
+          .from("squads")
+          .select("id, name")
+        const squadNameToId = new Map<string, number>()
+        for (const s of (squadsData ?? []) as { id: number; name: string }[]) {
+          squadNameToId.set(s.name, s.id)
         }
+        const selectedSquadIds = selectedSquads
+          .map((name) => squadNameToId.get(name))
+          .filter((id): id is number => id != null)
 
-        // Buscar team de cada colaborador
+        if (selectedSquadIds.length > 0) {
+          const { data: clientAssignments } = await supabase
+            .from("squad_client_assignments")
+            .select("client_group_id, squad_id")
+            .in("squad_id", selectedSquadIds)
+          allowedClientGroupIds = new Set<number>()
+          for (const a of (clientAssignments ?? []) as { client_group_id: number; squad_id: number }[]) {
+            allowedClientGroupIds.add(a.client_group_id)
+          }
+        } else {
+          allowedClientGroupIds = new Set<number>() // nenhum squad encontrado → vazio
+        }
+      }
+
+      // Filtro de team/user: por collaborator_id (mantém lógica existente)
+      if (selectedTeams.length > 0 || selectedUsers.length > 0) {
         const { data: teamRows } = await supabase
           .from("v_collaborator_team")
           .select("user_id, team_name")
@@ -235,7 +230,6 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
           if (tr.team_name) collabTeamMap.set(tr.user_id, tr.team_name)
         }
 
-        // Buscar user_name de cada colaborador
         const { data: collabNames } = await supabase
           .from("collaborators")
           .select("id, name")
@@ -245,26 +239,17 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
           collabNameMap.set(cn.id, cn.name)
         }
 
-        // Filtrar: colaborador passa se atende TODOS os filtros ativos
         const allCollabIds = new Set([
-          ...Array.from(collabSquadMap.keys()),
           ...Array.from(collabTeamMap.keys()),
           ...Array.from(collabNameMap.keys()),
         ])
 
         allowedCollaboratorIds = new Set<string>()
         for (const cid of Array.from(allCollabIds)) {
-          // Filtro de squad
-          if (selectedSquads.length > 0) {
-            const squadName = collabSquadMap.get(cid)
-            if (!squadName || !selectedSquads.includes(squadName)) continue
-          }
-          // Filtro de team
           if (selectedTeams.length > 0) {
             const teamName = collabTeamMap.get(cid)
             if (!teamName || !selectedTeams.includes(teamName)) continue
           }
-          // Filtro de user
           if (selectedUsers.length > 0) {
             const userName = collabNameMap.get(cid)
             if (!userName || !selectedUsers.includes(userName)) continue
@@ -281,7 +266,9 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
       const allocs = (allocData ?? []) as ProjectedAllocationRow[]
       const projectedMap = new Map<number, number>()
       for (const a of allocs) {
-        // Pular colaboradores que não passam nos filtros de squad/team/user
+        // Filtro de squad: pular alocações de clientes que não pertencem aos squads selecionados
+        if (allowedClientGroupIds && !allowedClientGroupIds.has(a.client_group_id)) continue
+        // Filtro de team/user: pular colaboradores que não passam
         if (allowedCollaboratorIds && !allowedCollaboratorIds.has(a.collaborator_id)) continue
 
         const range = periodToDateRange(a.period)
@@ -307,13 +294,12 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
         projectedMap.set(a.client_group_id, current + horasProporcionais)
       }
 
-      // Horas contratadas: squad/usuário zeram (não tem como associar); time filtra por department
+      // Horas contratadas: usuário zera (não tem como associar); squad/client filtra por client_group; time filtra por department
       const hasUserFilter = selectedUsers.length > 0
-      const hasSquadFilter = selectedSquads.length > 0
       const contractedMap = new Map<number, number>()
 
-      if (hasUserFilter || hasSquadFilter) {
-        // Zerar contratadas — não tem como associar a squad/usuário
+      if (hasUserFilter) {
+        // Zerar contratadas — não tem como associar a usuário individual
       } else {
         // 5) Contracted hours (tabela): buscar tudo e somar por client_group_id
         const { data: contractedData, error: contractedError } = await supabase
@@ -322,13 +308,14 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
         if (contractedError) throw contractedError
         const contractedRows = (contractedData ?? []) as ContractedHoursRow[]
         for (const c of contractedRows) {
+          // Filtro de squad: pular clientes fora dos squads selecionados
+          if (allowedClientGroupIds && !allowedClientGroupIds.has(c.client_group_id)) continue
           const hrs = c.hours ?? c.hours_contracted ?? 0
           const current = contractedMap.get(c.client_group_id) ?? 0
           contractedMap.set(c.client_group_id, current + hrs)
         }
 
         // 5b) Horas contratadas via precificador (client_pricing)
-        // Filtro de time: considerar só registros cujo department bate com selectedTeams (case-insensitive)
         const { data: pricingData, error: pricingError } = await supabase
           .from("client_pricing")
           .select("client_group_id, department, contracted_hours, start_date, end_date")
@@ -336,6 +323,8 @@ export function useClientsSummary(filters: ClientsSummaryFilters) {
           .gte("end_date", startDate)
         if (pricingError) throw pricingError
         for (const p of (pricingData ?? []) as ClientPricingRow[]) {
+          // Filtro de squad: pular clientes fora dos squads selecionados
+          if (allowedClientGroupIds && !allowedClientGroupIds.has(p.client_group_id)) continue
           if (selectedTeams.length > 0) {
             const deptNorm = (p.department ?? "").toLowerCase().trim()
             const teamMatch = selectedTeams.some(
