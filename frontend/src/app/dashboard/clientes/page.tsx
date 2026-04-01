@@ -38,9 +38,9 @@ import { Badge } from "@/components/ui/badge"
 import { getSquadHexColor } from "@/lib/squadColors"
 
 function executionColor(percent: number): string {
-  if (percent >= 90) return "#22c55e"
+  if (percent >= 90) return "#ef4444"
   if (percent >= 70) return "#f59e0b"
-  return "#ef4444"
+  return "#22c55e"
 }
 
 type SortField = "client_name" | "squad_name" | "contracted_hours" | "projected_hours" | "realized_hours" | "execution_percent"
